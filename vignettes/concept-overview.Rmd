@@ -68,6 +68,7 @@ airport <- object_type(
   ),
   primary_key = "airport_id",
   display_name = "Airport",
+  implements = "GeoLocated",
   source_kind = "table",
   source_table = "airports"
 )
