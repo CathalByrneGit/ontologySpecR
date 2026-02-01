@@ -1,0 +1,532 @@
+---
+title: "Concept Overview: Modelling the World with ontologySpecR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Concept Overview: Modelling the World with ontologySpecR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+library(ontologySpecR)
+```
+
+## What problem does this solve?
+
+Imagine your organisation manages airports, airlines, and flight routes. Data
+lives in several databases. Teams build dashboards, run analyses, and write
+operational scripts — each with its own idea of what an "airport" is, which
+columns matter, and how routes connect to airlines.
+
+The result: **no single source of truth for meaning.** Column names drift,
+join logic is duplicated, and a change in one table quietly breaks three
+reports.
+
+`ontologySpecR` solves this by providing a **shared vocabulary** — a small
+set of building blocks that let you describe *what things exist*, *how they
+relate*, and *what can be done to them*. That description is called an
+**ontology**, and a complete, versioned snapshot of one is called a
+**bundle**.
+
+Think of it like a blueprint for a building. The blueprint does not *contain*
+the bricks; it describes their shapes, sizes, and how they fit together. Any
+team that reads the blueprint can work from the same understanding.
+
+## The five building blocks
+
+Every ontology in `ontologySpecR` is built from five primitives:
+
+| Building block     | What it describes                        | Real-world analogy            |
+|--------------------|------------------------------------------|-------------------------------|
+| **Object type**    | A kind of thing (entity)                 | A table's schema              |
+| **Link type**      | A named relationship between two things  | A foreign key / join          |
+| **Interface**      | A shape contract several types share     | A trait / protocol            |
+| **Action type**    | An operation that changes things          | A stored procedure / endpoint |
+| **Query**          | A reusable, parameterised question        | A saved report / view         |
+
+We will walk through each one using a small aviation example.
+
+## Object types: describing things
+
+An **object type** says: *"This kind of thing exists, it has these
+properties, and this is how you identify one."*
+
+```{r object-type}
+airport <- object_type(
+  id = "Airport",
+  properties = list(
+    property_def("airport_id", "string", nullable = FALSE),
+    property_def("name",       "string"),
+    property_def("city",       "string"),
+    property_def("country",    "string"),
+    property_def("latitude",   "number"),
+    property_def("longitude",  "number")
+  ),
+  primary_key = "airport_id",
+  display_name = "Airport",
+  source_kind = "table",
+  source_table = "airports"
+)
+
+airport
+```
+
+A few things to notice:
+
+- **`property_def()`** defines one column. It needs an `id` and a `type`
+  (`"string"`, `"integer"`, `"number"`, `"boolean"`, `"date"`,
+  `"datetime"`, or `"json"`). You can mark it as not nullable.
+- **`primary_key`** accepts a simple character vector — `"airport_id"` — and
+  wraps it automatically. Composite keys work too:
+  `primary_key = c("region", "code")`.
+- **`source_kind`** and **`source_table`** describe *where the data lives*,
+  without coupling you to a specific database. The ontology says "this is a
+  table called `airports`"; the runtime decides how to connect to it.
+
+Let's define a second object type so we have something to link:
+
+```{r airline}
+airline <- object_type(
+  id = "Airline",
+  properties = list(
+    property_def("airline_id", "string", nullable = FALSE),
+    property_def("name",       "string", nullable = FALSE),
+    property_def("country",    "string"),
+    property_def("active",     "boolean")
+  ),
+  primary_key = "airline_id",
+  display_name = "Airline",
+  source_kind = "table",
+  source_table = "airlines"
+)
+
+airline
+```
+
+And a third — a flight route that connects airports to airlines:
+
+```{r route}
+route <- object_type(
+  id = "FlightRoute",
+  properties = list(
+    property_def("route_id",       "string",  nullable = FALSE),
+    property_def("origin_id",      "string",  nullable = FALSE),
+    property_def("destination_id", "string",  nullable = FALSE),
+    property_def("airline_id",     "string",  nullable = FALSE),
+    property_def("stops",          "integer"),
+    property_def("equipment",      "string")
+  ),
+  primary_key = "route_id",
+  display_name = "Flight Route",
+  source_kind = "table",
+  source_table = "routes"
+)
+
+route
+```
+
+At this point we have three independent entity definitions. They do not yet
+know about each other. That is what links are for.
+
+## Link types: connecting things
+
+A **link type** is a named, typed relationship between two object types. It
+says: *"Things of type A are connected to things of type B in this way."*
+
+```{r links}
+route_origin <- link_type(
+  id = "RouteOrigin",
+  from = "FlightRoute",
+  to = "Airport",
+  cardinality = "many-to-one",
+  display_name = "Route Origin",
+  join_from_keys = "origin_id",
+  join_to_keys = "airport_id"
+)
+
+route_destination <- link_type(
+  id = "RouteDestination",
+  from = "FlightRoute",
+  to = "Airport",
+  cardinality = "many-to-one",
+  display_name = "Route Destination",
+  join_from_keys = "destination_id",
+  join_to_keys = "airport_id"
+)
+
+route_operator <- link_type(
+  id = "RouteOperator",
+  from = "FlightRoute",
+  to = "Airline",
+  cardinality = "many-to-one",
+  display_name = "Route Operator",
+  join_from_keys = "airline_id",
+  join_to_keys = "airline_id"
+)
+
+route_origin
+```
+
+Key ideas:
+
+- **`from`** and **`to`** reference object type IDs — not R objects. This
+  keeps the contract declarative and serializable.
+- **`cardinality`** can be `"one-to-one"`, `"one-to-many"`, `"many-to-one"`,
+  or `"many-to-many"`.
+- **`join_from_keys`** / **`join_to_keys`** describe how the link materialises
+  at query time. A downstream query engine (like a future `objectSetsR`
+  package) reads this to generate the correct SQL join.
+
+With three links defined, we have a small graph:
+
+```
+Airport <--[RouteOrigin]-- FlightRoute --[RouteDestination]--> Airport
+                                 |
+                          [RouteOperator]
+                                 |
+                                 v
+                              Airline
+```
+
+## Interfaces: polymorphism across types
+
+What if several object types share a common shape? Airports have
+`latitude`/`longitude`. So might weather stations, warehouses, or delivery
+depots. Rather than writing separate logic for each, we define an
+**interface** — a contract that says *"any type implementing me must have
+these properties."*
+
+```{r interface}
+geo_located <- interface_type(
+  id = "GeoLocated",
+  display_name = "Geo-Located",
+  display_description = "Any entity with geographic coordinates.",
+  required_properties = list(
+    property_requirement("latitude",  "number"),
+    property_requirement("longitude", "number")
+  )
+)
+
+geo_located
+```
+
+Our `Airport` type already declared `implements = "GeoLocated"`. In a
+runtime system, you could ask: *"Give me everything that is GeoLocated"* and
+get back airports, weather stations, and warehouses — handled uniformly.
+
+Interfaces can also require links and actions:
+
+```{r interface-complex}
+# A more complex interface: anything that can be deactivated
+deactivatable <- interface_type(
+  id = "Deactivatable",
+  display_name = "Deactivatable",
+  required_properties = list(
+    property_requirement("active", "boolean")
+  ),
+  required_actions = "Deactivate"
+)
+
+deactivatable
+```
+
+This says: *"If a type claims to be Deactivatable, it must have an `active`
+property and support a `Deactivate` action."* Interface conformance can be
+checked programmatically, catching mismatches early.
+
+## Action types: doing things
+
+So far the ontology is static — it describes the world but does not change
+it. **Action types** define operations that modify objects, with declared
+parameters, effects, and optionally an implementation pointer.
+
+```{r action}
+update_status <- action_type(
+  id = "UpdateAirportStatus",
+  targets = "Airport",
+  display_name = "Update Airport Status",
+  parameters = list(
+    parameter_def("new_status", "string", required = TRUE,
+                  display_name = "New Status")
+  ),
+  effects = list(
+    effect_def("update", object_type_id = "Airport",
+               notes = "Sets the operational status field.")
+  ),
+  impl_kind = "r",
+  impl_entrypoint = "update_airport_status"
+)
+
+update_status
+```
+
+Breaking this down:
+
+- **`targets`** lists which object types this action applies to.
+- **`parameters`** define the inputs a caller must provide.
+- **`effects`** are a high-level declaration of *what changes*: `"create"`,
+  `"update"`, `"delete"`, or `"emit"` (for events). This lets governance
+  tools reason about what an action can do without reading its implementation.
+- **`implementation`** points to the actual code. `kind = "r"` and
+  `entrypoint = "update_airport_status"` means: *"call the R function
+  `update_airport_status()`."* Other backends (`"sql"`, `"http"`,
+  `"plugin"`) are equally valid.
+
+Actions are the bridge between the ontology (descriptive) and operations
+(imperative). They are what turn a data model into something you can safely
+act on.
+
+## Queries: asking reusable questions
+
+A **query** is a saved, parameterised question that returns object sets,
+tables, or scalars. Where actions *change* the world, queries *read* it.
+
+```{r query}
+nearby <- query_def(
+  id = "NearbyAirports",
+  returns_kind = "objectSet",
+  returns_object_type_id = "Airport",
+  display_name = "Nearby Airports",
+  parameters = list(
+    parameter_def("lat",       "number", required = TRUE),
+    parameter_def("lon",       "number", required = TRUE),
+    parameter_def("radius_km", "number", required = TRUE)
+  ),
+  def_kind = "sql",
+  def_body = paste(
+    "SELECT * FROM airports",
+    "WHERE haversine(latitude, longitude, :lat, :lon) < :radius_km"
+  )
+)
+
+nearby
+```
+
+Queries share the same `parameter_def()` building blocks as actions, so
+tooling that presents parameter forms can reuse the same UI code.
+
+## Bundles: packaging it all together
+
+A **bundle** wraps every building block into a single, versioned,
+distributable unit. Think of it as a snapshot of your ontology at a point in
+time.
+
+```{r bundle}
+aviation <- bundle(
+  bundle_id = "aviation-demo",
+  bundle_version = "0.1.0",
+  metadata = list(
+    name = "Aviation Demo Ontology",
+    description = "Airports, airlines, and flight routes.",
+    authors = list("Cathal Byrne"),
+    tags = list("aviation", "demo", "transport")
+  ),
+  objects    = list(airport, airline, route),
+  links      = list(route_origin, route_destination, route_operator),
+  interfaces = list(geo_located, deactivatable),
+  actions    = list(update_status),
+  queries    = list(nearby)
+)
+
+aviation
+```
+
+The bundle's `specVersion` tracks which version of the ontologySpecR schema
+it conforms to, while `bundleVersion` tracks your own ontology's evolution.
+
+## Serialization: JSON in, JSON out
+
+Bundles serialize to JSON so they can be stored, versioned in Git, shared
+across teams, or served from an API.
+
+```{r serialize}
+# Convert to a JSON string
+json <- bundle_to_json(aviation, pretty = TRUE)
+cat(substr(json, 1, 600), "...\n")
+```
+
+And back again:
+
+```{r deserialize}
+# Round-trip: JSON -> bundle -> print
+restored <- bundle_from_json(json)
+restored
+```
+
+The round-trip is lossless. Every S3 object is reconstructed with its
+correct class, so `is_object_type(restored$objects[[1]])` returns `TRUE`.
+
+For file I/O, use `write_bundle()` and `read_bundle()`:
+```r
+write_bundle(aviation, "aviation-demo.json")
+b <- read_bundle("aviation-demo.json")
+```
+
+## Validation: checking the contract
+
+Every bundle can be validated against the built-in JSON Schema (JSON Schema
+Draft 2020-12). This catches structural errors — missing required fields,
+wrong types, invalid IDs — before they cause problems downstream.
+
+```{r validate}
+# Returns TRUE if the bundle is valid
+validate_bundle(aviation)
+```
+
+If something is wrong, you get actionable error messages instead:
+
+```{r validate-bad}
+# A bundle missing required fields
+bad_json <- '{"bundleId": "oops"}'
+errors <- validate_bundle(bad_json)
+errors
+```
+
+Validation is especially useful in CI pipelines: *"does this ontology file
+still conform to the spec before we deploy?"*
+
+## How the pieces fit together
+
+Here is a visual summary of the five building blocks and their
+relationships:
+
+```
+  +-----------+     implements     +-------------+
+  | Interface |<-------------------| Object Type |
+  +-----------+                    +------+------+
+       |                                  |
+  requires actions                   properties
+       |                            primary key
+       v                            source binding
+  +-------------+                         |
+  | Action Type |---- targets ----------->+
+  +------+------+                         |
+         |                                |
+    parameters                     +------+------+
+    effects                        |  Link Type  |
+    implementation                 +-------------+
+                                     from -> to
+  +----------+                      cardinality
+  |  Query   |                      join keys
+  +----------+
+    parameters
+    returns (objectSet/table/scalar)
+    definition (sql/r/dsl)
+
+  +---------+
+  | Bundle  |  wraps all of the above into one versioned package
+  +---------+
+```
+
+## Extensions: making it your own
+
+Every building block has an optional `extensions` field — a free-form named
+list where you can attach domain-specific metadata without modifying the
+core schema.
+
+```{r extensions}
+# Attach custom metadata to an object type
+airport_ext <- object_type(
+  id = "Airport",
+  properties = list(
+    property_def("airport_id", "string", nullable = FALSE),
+    property_def("name", "string")
+  ),
+  primary_key = "airport_id",
+  extensions = list(
+    governance = list(owner = "data-team", review_cycle = "quarterly"),
+    ui = list(default_sort = "name", row_limit = 5000L)
+  )
+)
+
+# Extensions survive serialization
+airport_ext$extensions$governance$owner
+```
+
+This is how downstream packages can add their own concerns (governance
+policies, UI hints, audit trails) while keeping the core spec stable.
+
+## The source mapping model
+
+Object types and properties can declare *where their data comes from*
+without specifying *how to connect*. This separation is deliberate.
+
+At the **object type** level:
+
+```r
+object_type(
+  id = "Airport",
+  # ...
+  source_kind = "table",    # Could be "table", "view", "query", or "external"
+  source_table = "airports",
+  source_schema = "public"
+)
+```
+
+At the **property** level:
+
+```r
+property_def(
+  "elevation_metres", "number",
+  source_column = "elevation_ft",
+  source_expression = "elevation_ft * 0.3048"
+)
+```
+
+This says: *"The ontology property `elevation_metres` comes from the backend
+column `elevation_ft`, transformed by multiplying by 0.3048."* A downstream
+query engine uses this mapping to generate the correct SQL or dplyr
+expression.
+
+The ontology describes the *logical* model. The *physical* connection (which
+database, which credentials) is a runtime concern handled by whichever
+execution package you choose.
+
+## Where ontologySpecR fits in the ecosystem
+
+`ontologySpecR` is the foundation — the shared contract. It does not query
+databases, build UIs, or enforce security. Those are the jobs of
+downstream packages that speak the same language:
+
+```
+                         ontologySpecR
+                     (type system + JSON schema)
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+     ontologyR          objectSetsR          vertexR
+  (governance,       (lazy queries,       (system graphs,
+   audits, drift)     traversal)           simulation)
+          |                   |                   |
+          +-------------------+-------------------+
+                              |
+                   objectExplorerR, workshopR
+                     (interactive UIs)
+```
+
+Each package depends on `ontologySpecR` for the shared data structures —
+and on nothing else from the ecosystem. You can use `ontologySpecR` +
+`objectSetsR` without ever installing `vertexR`, or use it standalone to
+define and validate ontology bundles.
+
+## Summary
+
+| Concept       | Constructor            | Purpose                                         |
+|---------------|------------------------|-------------------------------------------------|
+| Property      | `property_def()`       | One typed field on an object type                |
+| Primary key   | `primary_key_def()`    | Which properties uniquely identify an object     |
+| Object type   | `object_type()`        | Schema for a real-world entity                   |
+| Link type     | `link_type()`          | Named relationship between object types          |
+| Interface     | `interface_type()`     | Shape contract that multiple types can implement |
+| Action type   | `action_type()`        | Parameterised operation with declared effects    |
+| Query         | `query_def()`          | Saved, parameterised question                    |
+| Bundle        | `bundle()`             | Versioned package of all the above               |
+| Serialization | `bundle_to_json()`, `read_bundle()`, etc. | JSON interchange      |
+| Validation    | `validate_bundle()`    | Check a bundle against the JSON Schema           |
+
+The core idea is simple: **describe your domain once, in code, and let every
+tool and team work from the same specification.**
