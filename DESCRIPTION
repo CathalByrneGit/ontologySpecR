@@ -1,0 +1,24 @@
+Package: ontologySpecR
+Title: Core Type System and Interchange Format for Ontology-Based R Packages
+Version: 0.1.0
+Authors@R:
+    person("Cathal", "Byrne", role = c("aut", "cre"),
+           email = "cathalbyrne@example.com")
+Description: Defines canonical S3 classes and JSON Schema for ontology
+    primitives: object types, link types, interfaces, action types, and
+    queries. Provides a shared intermediate representation (IR) so that
+    downstream packages (objectTypesR, linkTypesR, objectSetsR, etc.) can
+    interoperate without tight coupling. Bundles can be serialized to/from
+    JSON for distribution, validation, and API interchange.
+License: MIT + file LICENSE
+URL: https://github.com/CathalByrneGit/ontologySpecR
+BugReports: https://github.com/CathalByrneGit/ontologySpecR/issues
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    jsonlite,
+    jsonvalidate
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
