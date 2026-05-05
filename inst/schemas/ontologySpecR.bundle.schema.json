@@ -73,6 +73,18 @@
       "default": []
     },
 
+    "concepts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/conceptDef" },
+      "default": []
+    },
+
+    "templates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/conceptTemplateDef" },
+      "default": []
+    },
+
     "extensions": {
       "type": "object",
       "description": "Free-form extension point for non-core concepts.",
@@ -389,6 +401,54 @@
           }
         },
 
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+
+    "conceptDef": {
+      "type": "object",
+      "required": ["id", "objectTypeId", "scope", "version", "sqlExpr"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "objectTypeId": { "$ref": "#/$defs/refId", "description": "Object type this concept applies to." },
+        "scope": { "type": "string", "minLength": 1, "description": "Context bucket, e.g. 'clinical', 'operations'." },
+        "version": { "type": "integer", "minimum": 1, "description": "Monotonically increasing within (id, scope)." },
+        "sqlExpr": { "type": "string", "minLength": 1, "description": "SQL expression returning boolean." },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "active", "deprecated"],
+          "default": "draft"
+        },
+        "rationale": { "type": "string", "description": "Why this definition exists." },
+        "sourceStandard": { "type": "string", "description": "External standard this maps to, e.g. 'ILO', 'WHO'." },
+        "templateId": { "$ref": "#/$defs/refId", "description": "Parent template id if inherited." },
+        "parameterValues": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Parameter overrides applied from the parent template."
+        },
+        "display": { "$ref": "#/$defs/display" },
+        "extensions": { "type": "object", "additionalProperties": true }
+      }
+    },
+
+    "conceptTemplateDef": {
+      "type": "object",
+      "required": ["id", "objectTypeId", "baseSqlExpr"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "objectTypeId": { "$ref": "#/$defs/refId", "description": "Object type this template applies to." },
+        "baseSqlExpr": { "type": "string", "minLength": 1, "description": "SQL template with {{param_name}} placeholders." },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/parameterDef" },
+          "default": [],
+          "description": "Parameters that correspond to placeholders in baseSqlExpr."
+        },
+        "sourceStandard": { "type": "string" },
+        "display": { "$ref": "#/$defs/display" },
         "extensions": { "type": "object", "additionalProperties": true }
       }
     }

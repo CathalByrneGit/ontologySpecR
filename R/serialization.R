@@ -64,12 +64,11 @@ rebuild_bundle <- function(raw) {
     interfaces = lapply(raw$interfaces %||% list(), rebuild_interface_type),
     actions = lapply(raw$actions %||% list(), rebuild_action_type),
     queries = lapply(raw$queries %||% list(), rebuild_query_def),
+    concepts = lapply(raw$concepts %||% list(), rebuild_concept_def),
+    templates = lapply(raw$templates %||% list(), rebuild_concept_template_def),
     extensions = raw$extensions
   )
 }
-
-#' @keywords internal
-`%||%` <- function(a, b) if (is.null(a)) b else a
 
 #' @keywords internal
 rebuild_property_def <- function(raw) {
@@ -198,5 +197,38 @@ rebuild_query_def <- function(raw) {
     def_kind = raw$definition$kind,
     def_body = raw$definition$body,
     extensions = raw$extensions
+  )
+}
+
+#' @keywords internal
+rebuild_concept_def <- function(raw) {
+  concept_def(
+    id               = raw$id,
+    object_type_id   = raw$objectTypeId,
+    scope            = raw$scope,
+    version          = raw$version,
+    sql_expr         = raw$sqlExpr,
+    status           = raw$status %||% "draft",
+    rationale        = raw$rationale,
+    source_standard  = raw$sourceStandard,
+    template_id      = raw$templateId,
+    parameter_values = raw$parameterValues,
+    display_name     = raw$display$name,
+    display_description = raw$display$description,
+    extensions       = raw$extensions
+  )
+}
+
+#' @keywords internal
+rebuild_concept_template_def <- function(raw) {
+  concept_template_def(
+    id              = raw$id,
+    object_type_id  = raw$objectTypeId,
+    base_sql_expr   = raw$baseSqlExpr,
+    parameters      = lapply(raw$parameters %||% list(), rebuild_parameter_def),
+    source_standard = raw$sourceStandard,
+    display_name    = raw$display$name,
+    display_description = raw$display$description,
+    extensions      = raw$extensions
   )
 }

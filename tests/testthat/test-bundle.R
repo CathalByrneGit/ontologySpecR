@@ -34,6 +34,7 @@ test_that("print.ontology_bundle runs without error", {
   b <- bundle("test-pkg", "0.1.0")
   expect_output(print(b), "OntologyBundle")
   expect_output(print(b), "test-pkg")
+  expect_output(print(b), "concepts")
 })
 
 test_that("as_list.ontology_bundle round-trips through JSON", {

@@ -13,6 +13,8 @@
 #' @param interfaces List of `ontology_interface_type` objects.
 #' @param actions List of `ontology_action_type` objects.
 #' @param queries List of `ontology_query_def` objects.
+#' @param concepts List of `ontology_concept_def` objects.
+#' @param templates List of `ontology_concept_template_def` objects.
 #' @param metadata Named list or NULL. Bundle metadata (name, description,
 #'   authors, tags).
 #' @param extensions Named list or NULL. Free-form extension data.
@@ -39,6 +41,8 @@ bundle <- function(bundle_id, bundle_version,
                    interfaces = list(),
                    actions = list(),
                    queries = list(),
+                   concepts = list(),
+                   templates = list(),
                    metadata = NULL,
                    extensions = NULL) {
   assert_id(bundle_id, "bundle_id")
@@ -54,6 +58,8 @@ bundle <- function(bundle_id, bundle_version,
       interfaces = interfaces,
       actions = actions,
       queries = queries,
+      concepts = concepts,
+      templates = templates,
       extensions = extensions
     )),
     class = "ontology_bundle"
@@ -69,10 +75,11 @@ is_bundle <- function(x) inherits(x, "ontology_bundle")
 #' @export
 print.ontology_bundle <- function(x, ...) {
   cat(sprintf(
-    "<OntologyBundle> %s v%s (spec %s)\n  %d objects, %d links, %d interfaces, %d actions, %d queries\n",
+    "<OntologyBundle> %s v%s (spec %s)\n  %d objects, %d links, %d interfaces, %d actions, %d queries, %d concepts, %d templates\n",
     x$bundleId, x$bundleVersion, x$specVersion,
     length(x$objects), length(x$links), length(x$interfaces),
-    length(x$actions), length(x$queries)
+    length(x$actions), length(x$queries),
+    length(x$concepts), length(x$templates)
   ))
   invisible(x)
 }
@@ -89,6 +96,8 @@ as_list.ontology_bundle <- function(x, ...) {
     interfaces = lapply(x$interfaces, as_list),
     actions = lapply(x$actions, as_list),
     queries = lapply(x$queries, as_list),
+    concepts = lapply(x$concepts, as_list),
+    templates = lapply(x$templates, as_list),
     extensions = x$extensions
   ))
 }

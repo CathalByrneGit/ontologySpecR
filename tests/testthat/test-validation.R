@@ -12,11 +12,31 @@ test_that("validate_bundle returns TRUE for valid bundle", {
   expect_true(result)
 })
 
-test_that("validate_bundle returns errors for invalid JSON", {
+test_that("validate_bundle(error = FALSE) returns character errors for invalid JSON", {
   bad_json <- '{"bundleId": "no-version"}'
-  result <- validate_bundle(bad_json)
-  expect_false(isTRUE(result))
+  result <- validate_bundle(bad_json, error = FALSE)
   expect_type(result, "character")
+  expect_gt(length(result), 0L)
+})
+
+test_that("validate_bundle(error = TRUE) throws on invalid JSON", {
+  bad_json <- '{"bundleId": "no-version"}'
+  expect_error(validate_bundle(bad_json, error = TRUE), "validation failed")
+})
+
+test_that("validate_bundle returns empty character on success with error = FALSE", {
+  b <- bundle(
+    "valid-test2", "1.0.0",
+    objects = list(
+      object_type("Thing",
+        list(property_def("thing_id", "string", nullable = FALSE)),
+        "thing_id"
+      )
+    )
+  )
+  result <- validate_bundle(b, error = FALSE)
+  expect_type(result, "character")
+  expect_length(result, 0L)
 })
 
 test_that("validate_bundle works with verbose = TRUE on valid input", {
@@ -34,5 +54,20 @@ test_that("validate_bundle validates the example bundle file", {
   skip_if(example_path == "", message = "Example file not found (not installed)")
   json <- paste(readLines(example_path, warn = FALSE), collapse = "\n")
   result <- validate_bundle(json)
+  expect_true(result)
+})
+
+test_that("validate_bundle accepts a bundle with concepts and templates", {
+  b <- bundle(
+    "concept-valid", "1.0.0",
+    concepts = list(
+      concept_def("busy_airport", "Airport", "operations", 1L, "passengers > 50000")
+    ),
+    templates = list(
+      concept_template_def("utilisation_threshold", "Airport",
+                           "utilisation_rate > {{threshold}}")
+    )
+  )
+  result <- validate_bundle(b)
   expect_true(result)
 })

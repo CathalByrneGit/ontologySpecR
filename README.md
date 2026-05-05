@@ -11,6 +11,8 @@ Core type system and interchange format for building ontology-based R package ec
 - **Interfaces** — polymorphic "shape contracts" for object type conformance
 - **Action types** — parameterized operations with effects and policy hooks
 - **Queries** — reusable, parameterized query definitions
+- **Concept definitions** — versioned, scoped SQL boolean expressions evaluated against an object type
+- **Concept templates** — parameterized SQL templates (`{{placeholder}}` syntax) for concept families
 
 These primitives are packaged into **bundles** — versioned, distributable ontology specifications that can be serialized to/from JSON and validated against the built-in JSON Schema.
 
@@ -91,19 +93,43 @@ b2 <- read_bundle("my-ontology.json")
 
 ## Ecosystem
 
-`ontologySpecR` is the shared contract for a modular R package ecosystem inspired by Palantir Foundry's ontology layer:
+`ontologySpecR` is the zero-dependency foundation of a modular R package stack. Build order (dependency topological sort):
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        objectExploreR                           │
+│            Interactive Shiny UI (no-code browser)               │
+└──────────┬───────────────┬─────────────────┬────────────────────┘
+           │               │                 │
+     objectSetsR       actionTypesR       vertexR
+  Lazy query algebra   Action execution   Graph analysis
+           │               │                 │
+           └───────────────┴─────────────────┘
+                           │
+                       conceptR
+              Concept lifecycle · evaluation
+              templates · scores · scenarios
+                           │
+                       auditR
+              Sampling · disagreement · drift
+              governance log · RBAC · policy
+                           │
+                    ───────┴───────
+                   │               │
+           ontologySpecR          DBI
+          Type system / IR    Database layer
+          bundle · JSON
+```
 
 | Package | Role |
 |---|---|
-| **ontologySpecR** | Core type system + interchange (this package) |
-| ontologyR | Governance: versioned definitions, audits, drift detection |
-| objectTypesR | Object type schema + backend source mapping |
-| linkTypesR | Relationship schema + constraint checking |
-| interfacesR | Polymorphism / conformance testing |
-| objectSetsR | ObjectSet algebra + traversal (lazy queries) |
+| **ontologySpecR** | Core type system + JSON interchange (this package) |
+| objectSetsR | Lazy ObjectSet algebra + traversal |
+| vertexR | Graph analysis |
 | actionTypesR | Action definitions + submission lifecycle |
-| vertexR | System graphs: monitoring, simulation, optimization |
-| objectExplorerR | Interactive exploration UI (Shiny) |
+| conceptR | Concept lifecycle, evaluation, templates, scores |
+| auditR | Sampling, drift detection, governance log, RBAC |
+| objectExploreR | Interactive Shiny exploration UI |
 
 ## JSON Schema
 

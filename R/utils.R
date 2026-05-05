@@ -36,6 +36,17 @@ assert_choice <- function(x, choices, name = "value") {
   invisible(x)
 }
 
+#' Null-coalescing operator
+#'
+#' Returns `a` if non-NULL, otherwise `b`. Useful for supplying defaults when
+#' deserialising JSON where fields may be absent.
+#'
+#' @param a Value to test.
+#' @param b Fallback value returned when `a` is `NULL`.
+#' @return `a` if non-NULL, otherwise `b`.
+#' @export
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
 #' Build a display list
 #'
 #' @param name Display name.
