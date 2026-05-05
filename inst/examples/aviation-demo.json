@@ -185,5 +185,41 @@
         "body": "SELECT * FROM airports WHERE haversine(latitude, longitude, :lat, :lon) < :radius_km"
       }
     }
+  ],
+  "concepts": [
+    {
+      "id": "busy_airport",
+      "objectTypeId": "Airport",
+      "scope": "operations",
+      "version": 1,
+      "sqlExpr": "daily_passengers > 50000",
+      "status": "draft",
+      "display": {
+        "name": "Busy Airport",
+        "description": "An airport handling more than 50,000 passengers per day."
+      }
+    }
+  ],
+  "templates": [
+    {
+      "id": "utilisation_threshold",
+      "objectTypeId": "Airport",
+      "baseSqlExpr": "utilisation_rate > {{threshold}}",
+      "parameters": [
+        {
+          "id": "threshold",
+          "type": "number",
+          "required": false,
+          "display": {
+            "name": "Threshold",
+            "description": "Utilisation rate threshold (default 0.8)"
+          }
+        }
+      ],
+      "display": {
+        "name": "Utilisation Threshold",
+        "description": "Template for concepts that compare an airport's utilisation rate against a configurable threshold."
+      }
+    }
   ]
 }

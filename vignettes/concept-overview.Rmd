@@ -514,20 +514,170 @@ and on nothing else from the ecosystem. You can use `ontologySpecR` +
 `objectSetsR` without ever installing `vertexR`, or use it standalone to
 define and validate ontology bundles.
 
+## Concept definitions: versioned, scoped SQL expressions
+
+A **concept definition** (`concept_def`) is a versioned, scoped SQL
+expression that evaluates a boolean concept against an object type.
+It is the portable representation consumed by `conceptR` downstream.
+
+```{r concept_def}
+busy_airport <- concept_def(
+  id             = "busy_airport",
+  object_type_id = "Airport",
+  scope          = "operations",
+  version        = 1L,
+  sql_expr       = "daily_passengers > 50000",
+  status         = "draft",
+  display_name   = "Busy Airport",
+  display_description = "An airport handling more than 50,000 passengers per day."
+)
+
+busy_airport
+```
+
+Key fields:
+
+- **`id`** — a stable identifier; version this upward, never change the id.
+- **`object_type_id`** — which object type the SQL expression is written
+  against.
+- **`scope`** — a context bucket (`"clinical"`, `"operations"`, …) that lets
+  multiple teams define concepts for the same object type without collision.
+- **`version`** — a monotonically increasing integer within `(id, scope)`.
+  Activating a new version is the mechanism for rolling out definition
+  changes.
+- **`sql_expr`** — the SQL expression. It must return a boolean and is
+  evaluated against the object type's backing table by `conceptR`.
+- **`status`** — lifecycle state: `"draft"`, `"active"`, or `"deprecated"`.
+  Governance transitions are managed by `auditR`.
+
+You can also trace a definition back to an external standard:
+
+```{r concept_def_standard}
+concept_def(
+  id              = "minimum_runway_length",
+  object_type_id  = "Airport",
+  scope           = "regulatory",
+  version         = 1L,
+  sql_expr        = "longest_runway_m >= 1800",
+  source_standard = "ICAO"
+)
+```
+
+### Adding concept definitions to a bundle
+
+Concept definitions are first-class citizens of the bundle:
+
+```{r bundle_with_concepts}
+aviation_extended <- bundle(
+  bundle_id = "aviation-demo",
+  bundle_version = "0.2.0",
+  objects    = list(airport, airline, route),
+  links      = list(route_origin, route_destination, route_operator),
+  interfaces = list(geo_located),
+  actions    = list(update_status),
+  queries    = list(nearby),
+  concepts   = list(busy_airport),
+  templates  = list()
+)
+
+aviation_extended
+```
+
+### Serialisation and deserialisation
+
+Concept definitions serialise and deserialise exactly like every other
+bundle component:
+
+```{r concept_roundtrip}
+json2 <- bundle_to_json(aviation_extended, pretty = TRUE)
+cat(substr(json2, nchar(json2) - 600, nchar(json2)), "\n")
+```
+
+```{r concept_deserialise}
+restored2 <- bundle_from_json(json2)
+
+# The concept comes back as an ontology_concept_def
+is_concept_def(restored2$concepts[[1]])
+restored2$concepts[[1]]$id
+restored2$concepts[[1]]$scope
+```
+
+### Concept templates
+
+A **concept template** (`concept_template_def`) defines a parameterised
+SQL expression using `{{param_name}}` placeholders. Downstream consumers
+(e.g. `conceptR`) substitute parameter values to instantiate concrete
+`concept_def` objects at runtime.
+
+```{r concept_template}
+utilisation_template <- concept_template_def(
+  id             = "utilisation_threshold",
+  object_type_id = "Airport",
+  base_sql_expr  = "utilisation_rate > {{threshold}}",
+  parameters     = list(
+    parameter_def("threshold", "number", required = FALSE,
+                  display_name = "Threshold",
+                  display_description = "Utilisation rate threshold (default 0.8)")
+  ),
+  display_name   = "Utilisation Threshold"
+)
+
+utilisation_template
+```
+
+A `concept_def` can reference a template by setting `template_id` and
+supplying `parameter_values`. This records the provenance of derived
+definitions:
+
+```{r concept_from_template}
+high_utilisation <- concept_def(
+  id               = "high_utilisation_airport",
+  object_type_id   = "Airport",
+  scope            = "operations",
+  version          = 1L,
+  sql_expr         = "utilisation_rate > 0.85",
+  template_id      = "utilisation_threshold",
+  parameter_values = list(threshold = 0.85),
+  display_name     = "High Utilisation Airport"
+)
+
+high_utilisation$templateId
+high_utilisation$parameterValues
+```
+
+### How downstream packages consume concepts
+
+`conceptR` reads the bundle's `concepts` list and compiles each
+`concept_def` into a lazy SQL query:
+
+```r
+# Pseudocode — requires conceptR installed
+cpt_ctx <- conceptR::concept_context(bundle, con)
+result  <- conceptR::cpt_evaluate(cpt_ctx, concept_id = "busy_airport")
+# result is a lazy ObjectSet — no rows pulled until materialised
+```
+
+`auditR` then controls the lifecycle: sampling disagreements, detecting
+drift, and gating activation of new versions behind evidence thresholds.
+
+---
+
 ## Summary
 
-| Concept       | Constructor            | Purpose                                         |
-|---------------|------------------------|-------------------------------------------------|
-| Property      | `property_def()`       | One typed field on an object type                |
-| Primary key   | `primary_key_def()`    | Which properties uniquely identify an object     |
-| Object type   | `object_type()`        | Schema for a real-world entity                   |
-| Link type     | `link_type()`          | Named relationship between object types          |
-| Interface     | `interface_type()`     | Shape contract that multiple types can implement |
-| Action type   | `action_type()`        | Parameterised operation with declared effects    |
-| Query         | `query_def()`          | Saved, parameterised question                    |
-| Bundle        | `bundle()`             | Versioned package of all the above               |
-| Serialization | `bundle_to_json()`, `read_bundle()`, etc. | JSON interchange      |
-| Validation    | `validate_bundle()`    | Check a bundle against the JSON Schema           |
+| Concept           | Constructor                 | Purpose                                         |
+|-------------------|-----------------------------|-------------------------------------------------|
+| Property          | `property_def()`            | One typed field on an object type                |
+| Primary key       | `primary_key_def()`         | Which properties uniquely identify an object     |
+| Object type       | `object_type()`             | Schema for a real-world entity                   |
+| Link type         | `link_type()`               | Named relationship between object types          |
+| Interface         | `interface_type()`          | Shape contract that multiple types can implement |
+| Action type       | `action_type()`             | Parameterised operation with declared effects    |
+| Query             | `query_def()`               | Saved, parameterised question                    |
+| Concept def       | `concept_def()`             | Versioned, scoped SQL boolean for an object type |
+| Concept template  | `concept_template_def()`    | Parameterised SQL template for concept families  |
+| Bundle            | `bundle()`                  | Versioned package of all the above               |
+| Serialization     | `bundle_to_json()`, `read_bundle()`, etc. | JSON interchange      |
+| Validation        | `validate_bundle()`         | Check a bundle against the JSON Schema           |
 
 The core idea is simple: **describe your domain once, in code, and let every
 tool and team work from the same specification.**
