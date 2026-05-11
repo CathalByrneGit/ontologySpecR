@@ -104,3 +104,171 @@ test_that("as_list.ontology_bundle round-trips through JSON", {
   expect_s3_class(b2$actions[[1]], "ontology_action_type")
   expect_s3_class(b2$queries[[1]], "ontology_query_def")
 })
+
+# ---------------------------------------------------------------------------
+# validate_interfaces()
+# ---------------------------------------------------------------------------
+
+make_compliant_bundle <- function() {
+  bundle(
+    "compliant", "1.0.0",
+    objects = list(
+      object_type(
+        "Airport",
+        properties = list(
+          property_def("airport_id", "string", nullable = FALSE),
+          property_def("latitude",   "number"),
+          property_def("longitude",  "number")
+        ),
+        primary_key = "airport_id",
+        implements  = "GeoLocated"
+      )
+    ),
+    interfaces = list(
+      interface_type(
+        "GeoLocated",
+        required_properties = list(
+          property_requirement("latitude",  "number"),
+          property_requirement("longitude", "number")
+        )
+      )
+    )
+  )
+}
+
+test_that("validate_interfaces returns empty list for fully compliant bundle", {
+  result <- validate_interfaces(make_compliant_bundle(), error = FALSE)
+  expect_type(result, "list")
+  expect_length(result, 0L)
+})
+
+test_that("validate_interfaces returns empty list when no interfaces", {
+  b <- bundle(
+    "no-ifaces", "1.0.0",
+    objects = list(
+      object_type("Thing", list(property_def("thing_id", "string")), "thing_id")
+    )
+  )
+  expect_length(validate_interfaces(b, error = FALSE), 0L)
+})
+
+test_that("validate_interfaces returns named list of violations for non-compliant bundle", {
+  b <- bundle(
+    "bad", "1.0.0",
+    objects = list(
+      object_type(
+        "Sparse",
+        properties = list(property_def("sparse_id", "string")),
+        primary_key = "sparse_id",
+        implements  = "GeoLocated"
+      )
+    ),
+    interfaces = list(
+      interface_type(
+        "GeoLocated",
+        required_properties = list(
+          property_requirement("latitude",  "number"),
+          property_requirement("longitude", "number")
+        )
+      )
+    )
+  )
+  result <- validate_interfaces(b, error = FALSE)
+  expect_type(result, "list")
+  expect_true("Sparse" %in% names(result))
+  expect_true(any(grepl("latitude", result[["Sparse"]])))
+})
+
+test_that("validate_interfaces detects unknown interface in implements", {
+  b <- bundle(
+    "unknown-iface", "1.0.0",
+    objects = list(
+      object_type(
+        "Thing",
+        properties = list(property_def("thing_id", "string")),
+        primary_key = "thing_id",
+        implements  = "NonExistent"
+      )
+    ),
+    interfaces = list()
+  )
+  result <- validate_interfaces(b, error = FALSE)
+  expect_true("Thing" %in% names(result))
+  expect_true(any(grepl("unknown interface 'NonExistent'", result[["Thing"]])))
+})
+
+test_that("validate_interfaces aborts with error=TRUE", {
+  b <- bundle(
+    "bad-strict", "1.0.0",
+    objects = list(
+      object_type(
+        "Sparse",
+        properties = list(property_def("sparse_id", "string")),
+        primary_key = "sparse_id",
+        implements  = "GeoLocated"
+      )
+    ),
+    interfaces = list(
+      interface_type(
+        "GeoLocated",
+        required_properties = list(property_requirement("latitude", "number"))
+      )
+    )
+  )
+  expect_error(validate_interfaces(b, error = TRUE), "Interface validation failed")
+})
+
+test_that("bundle() with validate=TRUE aborts on interface violation", {
+  expect_error(
+    bundle(
+      "eager-bad", "1.0.0",
+      objects = list(
+        object_type(
+          "Thing",
+          properties = list(property_def("thing_id", "string")),
+          primary_key = "thing_id",
+          implements  = "GeoLocated"
+        )
+      ),
+      interfaces = list(
+        interface_type(
+          "GeoLocated",
+          required_properties = list(property_requirement("latitude", "number"))
+        )
+      ),
+      validate = TRUE
+    ),
+    "Interface validation failed"
+  )
+})
+
+test_that("bundle() with validate=TRUE succeeds on compliant bundle", {
+  expect_s3_class(
+    bundle(
+      "eager-ok", "1.0.0",
+      objects = list(
+        object_type(
+          "Airport",
+          properties = list(
+            property_def("airport_id", "string", nullable = FALSE),
+            property_def("latitude",   "number"),
+            property_def("longitude",  "number")
+          ),
+          primary_key = "airport_id",
+          implements  = "GeoLocated"
+        )
+      ),
+      interfaces = list(
+        interface_type(
+          "GeoLocated",
+          required_properties = list(
+            property_requirement("latitude",  "number"),
+            property_requirement("longitude", "number")
+          )
+        )
+      ),
+      validate = TRUE
+    ),
+    "ontology_bundle"
+  )
+})

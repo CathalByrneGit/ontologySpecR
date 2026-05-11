@@ -18,6 +18,9 @@
 #' @param metadata Named list or NULL. Bundle metadata (name, description,
 #'   authors, tags).
 #' @param extensions Named list or NULL. Free-form extension data.
+#' @param validate Logical. If `TRUE`, call `validate_interfaces()` after
+#'   construction and abort on any violation. Default `FALSE` so that bundles
+#'   can be built incrementally without triggering premature errors.
 #' @return An S3 object of class `ontology_bundle`.
 #' @export
 #' @examples
@@ -44,10 +47,11 @@ bundle <- function(bundle_id, bundle_version,
                    concepts = list(),
                    templates = list(),
                    metadata = NULL,
-                   extensions = NULL) {
+                   extensions = NULL,
+                   validate = FALSE) {
   assert_id(bundle_id, "bundle_id")
 
-  structure(
+  b <- structure(
     compact(list(
       specVersion = spec_version,
       bundleId = bundle_id,
@@ -64,6 +68,10 @@ bundle <- function(bundle_id, bundle_version,
     )),
     class = "ontology_bundle"
   )
+
+  if (validate) validate_interfaces(b, error = TRUE)
+
+  b
 }
 
 #' Test if an object is an ontology bundle
@@ -100,4 +108,64 @@ as_list.ontology_bundle <- function(x, ...) {
     templates = lapply(x$templates, as_list),
     extensions = x$extensions
   ))
+}
+
+#' Validate all interface implementations in a bundle
+#'
+#' Checks that every object type which declares `implements` satisfies the
+#' corresponding interface contracts (required properties, links, actions).
+#'
+#' @param bundle An `ontology_bundle`.
+#' @param error Logical. If `TRUE` (default), abort with a formatted message
+#'   when violations are found. If `FALSE`, return a named list mapping each
+#'   violating object type id to its character vector of violation messages.
+#'   An empty list means fully valid.
+#' @return Named list of violations (empty = valid), or aborts when
+#'   `error = TRUE` and violations exist.
+#' @export
+validate_interfaces <- function(bundle, error = TRUE) {
+  if (!is_bundle(bundle)) {
+    stop("`bundle` must be an ontology_bundle.", call. = FALSE)
+  }
+
+  if (length(bundle$interfaces) == 0 || length(bundle$objects) == 0) {
+    return(invisible(list()))
+  }
+
+  ifaces <- setNames(
+    bundle$interfaces,
+    vapply(bundle$interfaces, function(i) i$id, character(1))
+  )
+
+  all_violations <- list()
+
+  for (ot in bundle$objects) {
+    impl_ids <- unlist(ot$implements %||% list())
+    if (length(impl_ids) == 0) next
+
+    ot_violations <- character(0)
+
+    for (iface_id in impl_ids) {
+      if (!iface_id %in% names(ifaces)) {
+        ot_violations <- c(ot_violations, sprintf(
+          "[%s] implements unknown interface '%s'", ot$id, iface_id
+        ))
+        next
+      }
+      v <- check_implements(ot, ifaces[[iface_id]], bundle = bundle, error = FALSE)
+      if (!isTRUE(v)) ot_violations <- c(ot_violations, v)
+    }
+
+    if (length(ot_violations) > 0) all_violations[[ot$id]] <- ot_violations
+  }
+
+  if (length(all_violations) == 0) return(invisible(list()))
+
+  if (error) {
+    msgs <- unlist(all_violations, use.names = FALSE)
+    stop(paste(c("Interface validation failed:", msgs), collapse = "\n  "),
+         call. = FALSE)
+  }
+
+  all_violations
 }
