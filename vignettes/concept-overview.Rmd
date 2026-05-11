@@ -236,8 +236,101 @@ deactivatable
 ```
 
 This says: *"If a type claims to be Deactivatable, it must have an `active`
-property and support a `Deactivate` action."* Interface conformance can be
-checked programmatically, catching mismatches early.
+property and support a `Deactivate` action."*
+
+### Enforcing interface conformance at runtime
+
+Declaring `implements` is a promise. `check_implements()` verifies that
+promise for a single object type / interface pair:
+
+```{r check_implements}
+# Airport declares implements = "GeoLocated" and provides both properties —
+# this should pass cleanly.
+check_implements(airport, geo_located)
+```
+
+Pass `error = FALSE` to collect all violations instead of aborting on the
+first one:
+
+```{r check_implements_violations}
+# A type that breaks its contract
+bad_airport <- object_type(
+  id = "BadAirport",
+  properties = list(
+    property_def("airport_id", "string", nullable = FALSE),
+    property_def("latitude",   "string")   # wrong type — should be number
+    # longitude missing entirely
+  ),
+  primary_key = "airport_id"
+)
+
+violations <- check_implements(bad_airport, geo_located, error = FALSE)
+violations
+```
+
+For bundle-wide enforcement use `validate_interfaces()`. It walks every
+object type that declares `implements`, resolves each interface, and
+accumulates all violations:
+
+```{r validate_interfaces_ok}
+# The aviation bundle is fully compliant
+validate_interfaces(aviation_extended, error = FALSE)
+```
+
+```{r validate_interfaces_bad}
+# Build a bundle with a deliberate violation (error = FALSE so it doesn't abort)
+broken <- bundle(
+  bundle_id      = "broken-demo",
+  bundle_version = "0.1.0",
+  objects    = list(bad_airport),
+  interfaces = list(
+    interface_type(
+      "GeoLocated",
+      required_properties = list(
+        property_requirement("latitude",  "number"),
+        property_requirement("longitude", "number")
+      )
+    )
+  )
+)
+# bad_airport doesn't declare implements so no violation fires here —
+# add implements to show it:
+bad_airport2 <- object_type(
+  id = "BadAirport",
+  properties = list(
+    property_def("airport_id", "string", nullable = FALSE),
+    property_def("latitude",   "string")
+  ),
+  primary_key = "airport_id",
+  implements  = "GeoLocated"
+)
+broken2 <- bundle(
+  bundle_id = "broken-demo", bundle_version = "0.1.0",
+  objects    = list(bad_airport2),
+  interfaces = list(interface_type(
+    "GeoLocated",
+    required_properties = list(
+      property_requirement("latitude",  "number"),
+      property_requirement("longitude", "number")
+    )
+  ))
+)
+validate_interfaces(broken2, error = FALSE)
+```
+
+You can also ask `bundle()` to validate immediately at construction time
+by passing `validate = TRUE`. This is useful in CI pipelines where you
+want to catch contract violations before the bundle is written to disk:
+
+```r
+# Aborts at construction time if any interface contract is broken
+bundle(
+  bundle_id = "my-ontology", bundle_version = "1.0.0",
+  objects    = list(...),
+  interfaces = list(...),
+  validate   = TRUE
+)
+```
 
 ## Action types: doing things
 
@@ -494,19 +587,29 @@ databases, build UIs, or enforce security. Those are the jobs of
 downstream packages that speak the same language:
 
 ```
-                         ontologySpecR
-                     (type system + JSON schema)
-                              |
-          +-------------------+-------------------+
-          |                   |                   |
-     ontologyR          objectSetsR          vertexR
-  (governance,       (lazy queries,       (system graphs,
-   audits, drift)     traversal)           simulation)
-          |                   |                   |
-          +-------------------+-------------------+
-                              |
-                   objectExplorerR, workshopR
-                     (interactive UIs)
+┌─────────────────────────────────────────────────────────────────┐
+│                        objectExploreR                           │
+│            Interactive Shiny UI (no-code browser)               │
+└──────────┬───────────────┬─────────────────┬────────────────────┘
+           │               │                 │
+     objectSetsR       actionTypesR       vertexR
+  Lazy query algebra   Action execution   Graph analysis
+           │               │                 │
+           └───────────────┴─────────────────┘
+                           │
+                       conceptR
+              Concept lifecycle · evaluation
+              templates · scores · scenarios
+                           │
+                       auditR
+              Sampling · disagreement · drift
+              governance log · RBAC · policy
+                           │
+                    ───────┴───────
+                   │               │
+           ontologySpecR          DBI
+          Type system / IR    Database layer
+          bundle · JSON
 ```
 
 Each package depends on `ontologySpecR` for the shared data structures —
@@ -664,20 +767,22 @@ drift, and gating activation of new versions behind evidence thresholds.
 
 ## Summary
 
-| Concept           | Constructor                 | Purpose                                         |
-|-------------------|-----------------------------|-------------------------------------------------|
-| Property          | `property_def()`            | One typed field on an object type                |
-| Primary key       | `primary_key_def()`         | Which properties uniquely identify an object     |
-| Object type       | `object_type()`             | Schema for a real-world entity                   |
-| Link type         | `link_type()`               | Named relationship between object types          |
-| Interface         | `interface_type()`          | Shape contract that multiple types can implement |
-| Action type       | `action_type()`             | Parameterised operation with declared effects    |
-| Query             | `query_def()`               | Saved, parameterised question                    |
-| Concept def       | `concept_def()`             | Versioned, scoped SQL boolean for an object type |
-| Concept template  | `concept_template_def()`    | Parameterised SQL template for concept families  |
-| Bundle            | `bundle()`                  | Versioned package of all the above               |
-| Serialization     | `bundle_to_json()`, `read_bundle()`, etc. | JSON interchange      |
-| Validation        | `validate_bundle()`         | Check a bundle against the JSON Schema           |
+| Concept                  | Constructor / function              | Purpose                                         |
+|--------------------------|-------------------------------------|-------------------------------------------------|
+| Property                 | `property_def()`                    | One typed field on an object type                |
+| Primary key              | `primary_key_def()`                 | Which properties uniquely identify an object     |
+| Object type              | `object_type()`                     | Schema for a real-world entity                   |
+| Link type                | `link_type()`                       | Named relationship between object types          |
+| Interface                | `interface_type()`                  | Shape contract that multiple types can implement |
+| Action type              | `action_type()`                     | Parameterised operation with declared effects    |
+| Query                    | `query_def()`                       | Saved, parameterised question                    |
+| Concept def              | `concept_def()`                     | Versioned, scoped SQL boolean for an object type |
+| Concept template         | `concept_template_def()`            | Parameterised SQL template for concept families  |
+| Bundle                   | `bundle()`                          | Versioned package of all the above               |
+| Serialization            | `bundle_to_json()`, `read_bundle()`, etc. | JSON interchange                          |
+| Schema validation        | `validate_bundle()`                 | Check a bundle against the JSON Schema           |
+| Interface conformance    | `check_implements()`                | Verify one object type satisfies one interface   |
+| Bundle-wide conformance  | `validate_interfaces()`             | Check all implements declarations in a bundle    |
 
 The core idea is simple: **describe your domain once, in code, and let every
 tool and team work from the same specification.**
