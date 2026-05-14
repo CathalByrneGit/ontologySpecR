@@ -126,6 +126,11 @@ rebuild_link_type <- function(raw) {
     join_from_keys = if (!is.null(raw$join$fromKeys)) unlist(raw$join$fromKeys) else NULL,
     join_to_keys = if (!is.null(raw$join$toKeys)) unlist(raw$join$toKeys) else NULL,
     join_sql = raw$join$sql,
+    source_table      = raw$source$table,
+    source_from_col   = raw$source$fromCol,
+    source_to_col     = raw$source$toCol,
+    source_filter_col = raw$source$filterCol,
+    source_filter_val = if (!is.null(raw$source$filterVal)) unlist(raw$source$filterVal) else NULL,
     extensions = raw$extensions
   )
 }

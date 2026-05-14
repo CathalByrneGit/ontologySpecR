@@ -240,6 +240,24 @@
           }
         },
 
+        "source": {
+          "type": "object",
+          "description": "DuckPGQ edge-table source mapping.",
+          "additionalProperties": false,
+          "properties": {
+            "table":     { "type": "string", "description": "Backing edge table name." },
+            "fromCol":   { "type": "string", "description": "FK column pointing to the 'from' object type's PK." },
+            "toCol":     { "type": "string", "description": "FK column pointing to the 'to' object type's PK." },
+            "filterCol": { "type": "string", "description": "Discriminator column for shared edge tables." },
+            "filterVal": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Allowed values for filterCol."
+            }
+          }
+        },
+
         "extensions": { "type": "object", "additionalProperties": true }
       }
     },
