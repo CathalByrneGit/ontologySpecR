@@ -71,3 +71,18 @@ test_that("validate_bundle accepts a bundle with concepts and templates", {
   result <- validate_bundle(b)
   expect_true(result)
 })
+
+test_that("validate_bundle accepts legacy keys in JSON with a warning", {
+  legacy <- '{
+    "specVersion": "0.1.0", "bundleId": "legacy-json", "bundleVersion": "1.0.0",
+    "objectTypes": [{
+      "id": "Widget", "table_name": "widgets",
+      "properties": [{"id": "widget_id", "type": "string"}],
+      "primary_key": "widget_id"
+    }],
+    "links": [], "interfaces": [],
+    "actions": [], "queries": []
+  }'
+  expect_warning(result <- validate_bundle(legacy), "Legacy key")
+  expect_true(result)
+})

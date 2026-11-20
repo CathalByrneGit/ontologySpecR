@@ -27,6 +27,9 @@
 
 ## Changes
 
+* `validate_bundle()` now maps legacy keys in JSON input to canonical keys
+  (with a warning) before validating, so legacy bundles are accepted.
+
 * `read_bundle()` and `bundle_from_json()` now go through `as_bundle()`,
   gaining legacy key mapping support.
 
