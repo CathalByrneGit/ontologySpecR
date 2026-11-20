@@ -357,3 +357,126 @@ test_that("spec_example_bundle loads aviation-demo", {
   expect_true(is_bundle(b))
   expect_equal(bundle_id(b), "aviation-demo")
 })
+
+# --- property accessors ---
+
+make_prop_ot <- function() {
+  object_type(
+    id = "Thing",
+    properties = list(
+      property_def("thing_id", "string", nullable = FALSE),
+      property_def("label", "string", source_column = "label_col"),
+      property_def("shout", "string", source_expression = "upper(label_col)")
+    ),
+    primary_key = "thing_id"
+  )
+}
+
+test_that("property_column returns source column, falling back to the id", {
+  ot <- make_prop_ot()
+  expect_equal(property_column(ot$properties[[2]]), "label_col")  # column-backed
+  expect_equal(property_column(ot$properties[[1]]), "thing_id")   # bare property
+  expect_equal(property_column(ot$properties[[3]]), "shout")      # expression only
+})
+
+test_that("property_expression returns the expression or NULL", {
+  ot <- make_prop_ot()
+  expect_equal(property_expression(ot$properties[[3]]), "upper(label_col)")
+  expect_null(property_expression(ot$properties[[2]]))
+  expect_null(property_expression(ot$properties[[1]]))
+})
+
+test_that("object_properties names properties by id", {
+  ot <- make_prop_ot()
+  props <- object_properties(ot)
+  expect_equal(names(props), c("thing_id", "label", "shout"))
+  expect_equal(props$label$type, "string")
+  expect_equal(object_properties(object_type("E", list(), primary_key = "x")), list())
+})
+
+test_that("object_property returns one property and lists valid ids on error", {
+  ot <- make_prop_ot()
+  expect_equal(object_property(ot, "label")$id, "label")
+  expect_error(object_property(ot, "nope"),
+               "Unknown property 'nope' on object type 'Thing'. Valid ids: thing_id, label, shout",
+               fixed = TRUE)
+  empty <- object_type("E", list(), primary_key = "x")
+  expect_error(object_property(empty, "x"), "Valid ids: (none)", fixed = TRUE)
+})
+
+test_that("as_bundle maps legacy property source$name to source$column", {
+  warned <- .legacy_warned
+  rm(list = ls(warned, all.names = TRUE), envir = warned)
+  raw <- list(
+    bundleId = "legacy-prop", bundleVersion = "1.0.0",
+    objects = list(list(
+      id = "Thing",
+      properties = list(
+        list(id = "thing_id", type = "string"),
+        list(id = "label", type = "string", source = list(name = "label_col"))
+      ),
+      primaryKey = list(properties = list("thing_id"))
+    ))
+  )
+  expect_warning(b <- as_bundle(raw), "source$name", fixed = TRUE)
+  prop <- object_property(bundle_object_type(b, "Thing"), "label")
+  expect_equal(property_column(prop), "label_col")
+  expect_null(prop$source$name)
+})
+
+test_that("as_bundle prefers an explicit source$column over legacy name", {
+  raw <- list(
+    bundleId = "legacy-prop2", bundleVersion = "1.0.0",
+    objects = list(list(
+      id = "Thing",
+      properties = list(
+        list(id = "label", type = "string",
+             source = list(name = "old", column = "new"))
+      ),
+      primaryKey = list(properties = list("label"))
+    ))
+  )
+  b <- as_bundle(raw)
+  expect_equal(property_column(object_property(bundle_object_type(b, "Thing"), "label")), "new")
+})
+
+test_that("as_bundle maps legacy join from_keys/to_keys", {
+  warned <- .legacy_warned
+  rm(list = ls(warned, all.names = TRUE), envir = warned)
+  raw <- list(
+    bundleId = "legacy-join", bundleVersion = "1.0.0",
+    links = list(list(id = "L", from = "A", to = "B",
+                      join = list(from_keys = list("a_id"), to_keys = list("b_id"))))
+  )
+  w <- character()
+  b <- withCallingHandlers(
+    as_bundle(raw),
+    warning = function(cnd) { w <<- c(w, conditionMessage(cnd)); invokeRestart("muffleWarning") }
+  )
+  expect_true(any(grepl("join$from_keys", w, fixed = TRUE)))
+  expect_true(any(grepl("join$to_keys", w, fixed = TRUE)))
+  expect_equal(link_join_keys(bundle_link_type(b, "L")),
+               list(from = "a_id", to = "b_id"))
+})
+
+# --- link_join_keys ---
+
+test_that("link_join_keys handles single and composite keys", {
+  single <- link_type("L", "A", "B", join_from_keys = "a_id", join_to_keys = "b_id")
+  expect_equal(link_join_keys(single), list(from = "a_id", to = "b_id"))
+
+  composite <- link_type("C", "A", "B",
+                         join_from_keys = c("a1", "a2"), join_to_keys = c("b1", "b2"))
+  expect_equal(link_join_keys(composite),
+               list(from = c("a1", "a2"), to = c("b1", "b2")))
+})
+
+test_that("link_join_keys errors on missing join or mismatched lengths", {
+  expect_error(link_join_keys(link_type("NoJoin", "A", "B")),
+               "Link type 'NoJoin' is missing join keys", fixed = TRUE)
+  one_sided <- link_type("OneSided", "A", "B", join_from_keys = "a")
+  expect_error(link_join_keys(one_sided), "missing join keys", fixed = TRUE)
+  mismatch <- link_type("Mismatch", "A", "B",
+                        join_from_keys = c("a1", "a2"), join_to_keys = "b1")
+  expect_error(link_join_keys(mismatch), "2 fromKeys but 1 toKeys", fixed = TRUE)
+})

@@ -123,9 +123,16 @@ object_table(ot)        # "airports" (or falls back to id)
 object_pk(ot)           # c("airport_id")
 object_property_ids(ot) # c("airport_id", "name", "city", ...)
 object_source(ot)       # list(kind = "table", table = "airports", ...)
+object_properties(ot)   # named list of property defs, keyed by id
+object_property(ot, "name")  # one property; errors list the valid ids
+
+# Property accessors
+property_column(p)      # backing column (falls back to the property id)
+property_expression(p)  # source expression, or NULL
 
 # Link type accessors
 link_endpoints(lt)      # list(from = "FlightRoute", to = "Airport")
+link_join_keys(lt)      # list(from = "origin_id", to = "airport_id")
 
 # Example bundle for testing
 b <- spec_example_bundle()  # loads aviation-demo.json

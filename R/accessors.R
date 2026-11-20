@@ -23,6 +23,8 @@
 #'   `linkTypes`/`link_types` -> `links`, etc.
 #' - Object type level: `table_name` -> `source$table`,
 #'   flat `primary_key`/`primary_key_id` -> `primaryKey$properties`
+#' - Property level: `source$name` -> `source$column`
+#' - Link level: `join$from_keys`/`join$to_keys` -> `join$fromKeys`/`join$toKeys`
 #' - Action level: `action_id` -> `id`
 #'
 #' @param x An `ontology_bundle`, a list, or a path to a JSON file.
@@ -88,6 +90,11 @@ map_legacy_bundle_keys <- function(raw) {
     raw$objects <- lapply(raw$objects, map_legacy_object_type_keys)
   }
 
+  # Map legacy link-level keys
+  if (!is.null(raw$links)) {
+    raw$links <- lapply(raw$links, map_legacy_link_keys)
+  }
+
   # Map legacy action-level keys
   if (!is.null(raw$actions)) {
     raw$actions <- lapply(raw$actions, map_legacy_action_keys)
@@ -125,7 +132,37 @@ map_legacy_object_type_keys <- function(ot) {
     }
   }
 
+  # property source$name -> source$column
+  if (!is.null(ot$properties)) {
+    ot$properties <- lapply(ot$properties, map_legacy_property_keys)
+  }
+
   ot
+}
+
+#' @keywords internal
+map_legacy_property_keys <- function(prop) {
+  if (!is.null(prop$source$name) && is.null(prop$source$column)) {
+    warn_legacy_key("source$name", "source$column")
+    prop$source$column <- prop$source$name
+    prop$source$name <- NULL
+  }
+  prop
+}
+
+#' @keywords internal
+map_legacy_link_keys <- function(link) {
+  if (!is.null(link$join$from_keys) && is.null(link$join$fromKeys)) {
+    warn_legacy_key("join$from_keys", "join$fromKeys")
+    link$join$fromKeys <- link$join$from_keys
+    link$join$from_keys <- NULL
+  }
+  if (!is.null(link$join$to_keys) && is.null(link$join$toKeys)) {
+    warn_legacy_key("join$to_keys", "join$toKeys")
+    link$join$toKeys <- link$join$to_keys
+    link$join$to_keys <- NULL
+  }
+  link
 }
 
 #' @keywords internal
@@ -404,6 +441,52 @@ object_property_ids <- function(ot) {
   vapply(props, function(p) p$id %||% "", character(1))
 }
 
+#' Get the properties of an object type, named by id
+#'
+#' @param ot An object type.
+#' @return A named list of property definitions, keyed by id.
+#' @export
+object_properties <- function(ot) {
+  index_by_id(ot$properties %||% list())
+}
+
+#' Get a single property of an object type
+#'
+#' @param ot An object type.
+#' @param id Character. The property id.
+#' @return A property definition. Aborts on an unknown id, listing the valid ones.
+#' @export
+object_property <- function(ot, id) {
+  props <- object_properties(ot)
+  if (is.null(props[[id]])) {
+    valid <- if (length(props) == 0) "(none)" else paste(names(props), collapse = ", ")
+    stop(sprintf("Unknown property '%s' on object type '%s'. Valid ids: %s",
+                 id, ot$id, valid), call. = FALSE)
+  }
+  props[[id]]
+}
+
+#' Get the backing column of a property
+#'
+#' Returns `source$column`, falling back to the property id when the property
+#' has no explicit column mapping.
+#'
+#' @param p A property definition.
+#' @return Character.
+#' @export
+property_column <- function(p) {
+  p$source$column %||% p$id
+}
+
+#' Get the source expression of a property
+#'
+#' @param p A property definition.
+#' @return Character, or `NULL` if the property has no source expression.
+#' @export
+property_expression <- function(p) {
+  p$source$expression
+}
+
 # ============================================================================
 # Link Type Accessors
 # ============================================================================
@@ -415,6 +498,29 @@ object_property_ids <- function(ot) {
 #' @export
 link_endpoints <- function(lt) {
   list(from = lt$from, to = lt$to)
+}
+
+#' Get the join keys of a link type
+#'
+#' Reads `join$fromKeys` / `join$toKeys` and flattens them to character
+#' vectors. Aborts if either side is missing or the two lengths differ.
+#'
+#' @param lt A link type.
+#' @return A list with `from` and `to` character vectors of property ids.
+#' @export
+link_join_keys <- function(lt) {
+  from <- as.character(unlist(lt$join$fromKeys, use.names = FALSE))
+  to <- as.character(unlist(lt$join$toKeys, use.names = FALSE))
+  if (length(from) == 0 || length(to) == 0) {
+    stop(sprintf("Link type '%s' is missing join keys.", lt$id), call. = FALSE)
+  }
+  if (length(from) != length(to)) {
+    stop(sprintf(
+      "Link type '%s' has %d fromKeys but %d toKeys; they must match.",
+      lt$id, length(from), length(to)
+    ), call. = FALSE)
+  }
+  list(from = from, to = to)
 }
 
 # ============================================================================
