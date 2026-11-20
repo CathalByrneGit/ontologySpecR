@@ -367,6 +367,39 @@ write_bundle(aviation, "aviation-demo.json")
 b <- read_bundle("aviation-demo.json")
 ```
 
+## Reading a bundle: the accessor layer
+
+Once you have a bundle, read it through the accessor functions rather than
+reaching into it with `$`. Accessors are the stable contract: downstream
+packages depend on them, so the internal layout can evolve without breaking
+anyone.
+
+```{r accessors}
+b <- spec_example_bundle()
+
+bundle_id(b)
+names(bundle_object_types(b))
+
+airport_ot <- bundle_object_type(b, "Airport")
+object_table(airport_ot)
+object_pk(airport_ot)
+object_property_ids(airport_ot)
+
+link_endpoints(bundle_link_type(b, "RouteOrigin"))
+```
+
+Asking for an id that does not exist fails with a message listing the valid
+ids:
+
+```{r accessor_error, error = TRUE}
+bundle_object_type(b, "Spaceport")
+```
+
+`as_bundle()` is the single tolerant reader. It accepts a bundle, a raw list,
+or a path to a JSON file, and maps older key names (such as `objectTypes` or
+`table_name`) to the current ones with a warning. `read_bundle()` and
+`bundle_from_json()` both go through it.
+
 ## Validation: checking the contract
 
 Every bundle can be validated against the built-in JSON Schema (JSON Schema
@@ -548,7 +581,7 @@ Key fields:
 - **`sql_expr`** — the SQL expression. It must return a boolean and is
   evaluated against the object type's backing table by `conceptR`.
 - **`status`** — lifecycle state: `"draft"`, `"active"`, or `"deprecated"`.
-  Governance transitions are managed by `auditR`.
+  Governance transitions are managed by `conceptR`.
 
 You can also trace a definition back to an external standard:
 
@@ -657,7 +690,7 @@ result  <- conceptR::cpt_evaluate(cpt_ctx, concept_id = "busy_airport")
 # result is a lazy ObjectSet — no rows pulled until materialised
 ```
 
-`auditR` then controls the lifecycle: sampling disagreements, detecting
+`conceptR` also controls the lifecycle: sampling disagreements, detecting
 drift, and gating activation of new versions behind evidence thresholds.
 
 ---
@@ -677,6 +710,7 @@ drift, and gating activation of new versions behind evidence thresholds.
 | Concept template  | `concept_template_def()`    | Parameterised SQL template for concept families  |
 | Bundle            | `bundle()`                  | Versioned package of all the above               |
 | Serialization     | `bundle_to_json()`, `read_bundle()`, etc. | JSON interchange      |
+| Accessors         | `as_bundle()`, `bundle_object_type()`, `object_pk()`, etc. | Stable read API for bundles |
 | Validation        | `validate_bundle()`         | Check a bundle against the JSON Schema           |
 
 The core idea is simple: **describe your domain once, in code, and let every
