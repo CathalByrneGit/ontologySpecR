@@ -91,13 +91,57 @@ write_bundle(b, "my-ontology.json")
 b2 <- read_bundle("my-ontology.json")
 ```
 
+## Reading bundles
+
+The accessor layer provides a stable API for downstream packages. All packages
+in the ecosystem should use these accessors rather than accessing `$` fields
+directly.
+
+```r
+# Load a bundle (from file, raw list, or existing bundle)
+b <- as_bundle("my-ontology.json")
+
+# Bundle metadata
+bundle_id(b)           # "aviation-demo"
+bundle_version(b)      # "0.1.0"
+bundle_spec_version(b) # "0.1.0"
+
+# Collections (returned as named lists, keyed by id)
+bundle_object_types(b)    # list(Airport = ..., Airline = ...)
+bundle_link_types(b)
+bundle_action_types(b)
+bundle_queries(b)
+bundle_concepts(b)
+
+# Single entities (errors with valid ids if unknown)
+ot <- bundle_object_type(b, "Airport")
+lt <- bundle_link_type(b, "RouteOrigin")
+at <- bundle_action_type(b, "UpdateAirportStatus")
+
+# Object type accessors
+object_table(ot)        # "airports" (or falls back to id)
+object_pk(ot)           # c("airport_id")
+object_property_ids(ot) # c("airport_id", "name", "city", ...)
+object_source(ot)       # list(kind = "table", table = "airports", ...)
+
+# Link type accessors
+link_endpoints(lt)      # list(from = "FlightRoute", to = "Airport")
+
+# Example bundle for testing
+b <- spec_example_bundle()  # loads aviation-demo.json
+```
+
+The `as_bundle()` function also handles legacy key mappings (e.g. `objectTypes`
+instead of `objects`) with a warning, ensuring backward compatibility with
+older bundle formats.
+
 ## Ecosystem
 
 `ontologySpecR` is the zero-dependency foundation of a modular R package stack. Build order (dependency topological sort):
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        objectExploreR                           │
+│                        objectExplorerR                          │
 │            Interactive Shiny UI (no-code browser)               │
 └──────────┬───────────────┬─────────────────┬────────────────────┘
            │               │                 │
@@ -107,12 +151,8 @@ b2 <- read_bundle("my-ontology.json")
            └───────────────┴─────────────────┘
                            │
                        conceptR
-              Concept lifecycle · evaluation
-              templates · scores · scenarios
-                           │
-                       auditR
-              Sampling · disagreement · drift
-              governance log · RBAC · policy
+           Concept lifecycle · evaluation · audit
+           templates · scores · sampling · drift
                            │
                     ───────┴───────
                    │               │
@@ -125,11 +165,10 @@ b2 <- read_bundle("my-ontology.json")
 |---|---|
 | **ontologySpecR** | Core type system + JSON interchange (this package) |
 | objectSetsR | Lazy ObjectSet algebra + traversal |
-| vertexR | Graph analysis |
+| vertexR | Graph analysis (tidygraph) |
 | actionTypesR | Action definitions + submission lifecycle |
-| conceptR | Concept lifecycle, evaluation, templates, scores |
-| auditR | Sampling, drift detection, governance log, RBAC |
-| objectExploreR | Interactive Shiny exploration UI |
+| conceptR | Concept lifecycle, evaluation, templates, audit, governance |
+| objectExplorerR | Interactive Shiny exploration UI |
 
 ## JSON Schema
 
