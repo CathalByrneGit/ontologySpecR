@@ -1,6 +1,6 @@
 Package: ontologySpecR
 Title: Core Type System and Interchange Format for Ontology-Based R Packages
-Version: 0.1.0
+Version: 0.2.0
 Authors@R:
     person("Cathal", "Byrne", role = c("aut", "cre"),
            email = "cathalbyrne@example.com")

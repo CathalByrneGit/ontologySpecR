@@ -17,6 +17,8 @@ bundle_to_json <- function(x, pretty = TRUE) {
 #' Parse a bundle from JSON
 #'
 #' Deserializes a JSON string into an `ontology_bundle` object.
+#' Legacy keys (e.g. `objectTypes` instead of `objects`) are mapped
+#' automatically with a warning.
 #'
 #' @param json Character. A JSON string representing a bundle.
 #' @return An `ontology_bundle` object.
@@ -24,7 +26,7 @@ bundle_to_json <- function(x, pretty = TRUE) {
 #' @importFrom jsonlite fromJSON
 bundle_from_json <- function(json) {
   raw <- jsonlite::fromJSON(json, simplifyVector = TRUE, simplifyDataFrame = FALSE)
-  rebuild_bundle(raw)
+  as_bundle(raw)
 }
 
 #' Write a bundle to a JSON file
@@ -42,12 +44,15 @@ write_bundle <- function(x, path, pretty = TRUE) {
 
 #' Read a bundle from a JSON file
 #'
+#' Reads a JSON file and returns an `ontology_bundle` object.
+#' Legacy keys (e.g. `objectTypes` instead of `objects`) are mapped
+#' automatically with a warning.
+#'
 #' @param path Character. File path to read from.
 #' @return An `ontology_bundle` object.
 #' @export
 read_bundle <- function(path) {
-  json <- paste(readLines(path, warn = FALSE), collapse = "\n")
-  bundle_from_json(json)
+  as_bundle(path)
 }
 
 # --- Internal reconstruction helpers ---
