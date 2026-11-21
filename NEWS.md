@@ -1,3 +1,21 @@
+# ontologySpecR 0.2.1
+
+## New features
+
+* Property and link accessors, so downstream packages stop reading these
+  fields by hand:
+  - `property_column(p)` — `source$column`, falling back to the property id
+  - `property_expression(p)` — `source$expression` or `NULL`
+  - `object_properties(ot)` — properties as a list named by id
+  - `object_property(ot, id)` — one property; unknown ids abort and list the
+    valid ones
+  - `link_join_keys(lt)` — `list(from =, to =)` character vectors from
+    `join$fromKeys` / `join$toKeys`; aborts if either side is missing or the
+    lengths differ
+* `as_bundle()` now also maps legacy property `source$name` -> `source$column`
+  and legacy link `join$from_keys` / `join$to_keys` -> `join$fromKeys` /
+  `join$toKeys` (with the usual one-time warning).
+
 # ontologySpecR 0.2.0
 
 ## New features
