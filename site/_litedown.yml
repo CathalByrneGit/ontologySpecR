@@ -1,0 +1,10 @@
+# Replaces the template's copy. _nav.md overrides litedown's alphabetical nav;
+# keep the footer include and numbered sections that the template provides.
+site:
+output:
+  html:
+    meta:
+      include_before: "_nav.md"
+      include_after: "_footer.md"
+    options:
+      number_sections: true

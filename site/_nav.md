@@ -1,0 +1,6 @@
+[Home](/index.html)
+[Getting started](/getting-started.html)
+[What is an ontology?](/what-is-an-ontology.html)
+[Articles](/articles.html)
+[Manual](/manual.html)
+[News](/news.html)
