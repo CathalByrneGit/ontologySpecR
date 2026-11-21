@@ -28,9 +28,12 @@ jobs:
           extra-packages: litedown xfun roxygen2 .
           r-universe: yihui
 
-      # No man/ is committed; generate Rd files so the manual page has content.
+      # No man/ is committed; generate Rd files, then reinstall so the installed
+      # package (which the manual page reads) includes the help pages.
       - name: Generate Rd documentation
-        run: Rscript -e 'roxygen2::roxygenise()'
+        run: |
+          Rscript -e 'roxygen2::roxygenise()'
+          R CMD INSTALL .
 
       - uses: yihui/actions/litedown-site@main
         with:
