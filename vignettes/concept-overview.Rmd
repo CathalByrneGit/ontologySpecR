@@ -414,7 +414,7 @@ If something is wrong, you get actionable error messages instead:
 ```{r validate-bad}
 # A bundle missing required fields
 bad_json <- '{"bundleId": "oops"}'
-errors <- validate_bundle(bad_json)
+errors <- validate_bundle(bad_json, error = FALSE)
 errors
 ```
 
