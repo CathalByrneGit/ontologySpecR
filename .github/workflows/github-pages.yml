@@ -25,8 +25,11 @@ jobs:
       # then R CMD build + INSTALL the package itself (".") so vignettes land in doc/.
       - uses: yihui/actions/setup-r-dependencies@HEAD
         with:
-          extra-packages: litedown xfun .
+          extra-packages: litedown xfun roxygen2 .
           r-universe: yihui
+      # No man/ is committed; generate Rd files so the manual page has content.
+      - name: Generate Rd documentation
+        run: Rscript -e 'roxygen2::roxygenise()'
       - uses: yihui/actions/litedown-site@HEAD
         with:
           site-dir: 'site'
