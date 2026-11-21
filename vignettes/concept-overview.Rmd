@@ -1,17 +1,15 @@
 ---
 title: "Concept Overview: Modelling the World with ontologySpecR"
-output: rmarkdown::html_vignette
+output:
+  litedown::html_format: default
 vignette: >
   %\VignetteIndexEntry{Concept Overview: Modelling the World with ontologySpecR}
-  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEngine{litedown::vignette}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}
-knitr::opts_chunk$set(
-  collapse = TRUE,
-  comment = "#>"
-)
+litedown::reactor(collapse = TRUE, comment = "#>")
 library(ontologySpecR)
 ```
 
