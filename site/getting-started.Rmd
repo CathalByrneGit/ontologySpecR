@@ -1,0 +1,153 @@
+---
+title: Getting started
+---
+
+```{r setup, include = FALSE}
+library(ontologySpecR)
+```
+
+This page is the short, hands-on route: define a small ontology, package it,
+validate it, save it, and read it back. If the vocabulary is new, start with
+[What is an ontology?](what-is-an-ontology.html).
+
+## The problem
+
+Several tools in a project each need to know what an "Airport" is, which
+columns identify one, and how it relates to a "FlightRoute". Without a shared
+description, each tool hard-codes its own guess, and the guesses drift apart.
+
+## The solution
+
+Describe the domain once, as a **bundle**:
+
+1. Define **object types**, **links** and (optionally) interfaces, actions,
+   queries and concepts with constructors.
+2. Package them with `bundle()`.
+3. **Validate** against the shipped JSON Schema.
+4. **Share** as a JSON file; read it everywhere through the **accessors**.
+
+## Install
+
+```r
+# install.packages("pak")
+pak::pak("CathalByrneGit/ontologySpecR")
+```
+
+## Quick start
+
+```{r quickstart}
+library(ontologySpecR)
+
+airport <- object_type(
+  id = "Airport",
+  properties = list(
+    property_def("airport_id", "string", nullable = FALSE),
+    property_def("name", "string")
+  ),
+  primary_key = "airport_id",
+  source_kind = "table",
+  source_table = "airports"
+)
+
+route <- object_type(
+  id = "FlightRoute",
+  properties = list(
+    property_def("route_id", "string", nullable = FALSE),
+    property_def("origin_id", "string", nullable = FALSE)
+  ),
+  primary_key = "route_id",
+  source_kind = "table",
+  source_table = "routes"
+)
+
+route_origin <- link_type(
+  id = "RouteOrigin",
+  from = "FlightRoute",
+  to = "Airport",
+  cardinality = "many-to-one",
+  join_from_keys = "origin_id",
+  join_to_keys = "airport_id"
+)
+
+b <- bundle(
+  bundle_id = "aviation-mini",
+  bundle_version = "0.1.0",
+  objects = list(airport, route),
+  links = list(route_origin)
+)
+b
+```
+
+## Validate
+
+`validate_bundle()` checks the bundle against the built-in JSON Schema
+(Draft 2020-12). With `error = FALSE` it returns the problems instead of
+stopping; an empty result means valid.
+
+```{r validate}
+validate_bundle(b, error = FALSE)
+```
+
+## Save and load
+
+```{r roundtrip}
+path <- tempfile(fileext = ".json")
+write_bundle(b, path)
+
+restored <- read_bundle(path)
+restored
+```
+
+## Read it through the accessors
+
+Downstream code should not reach into a bundle with `$`. The accessors are
+the stable contract, and unknown ids fail with a helpful message.
+
+```{r accessors}
+bundle_id(restored)
+names(bundle_object_types(restored))
+
+ot <- bundle_object_type(restored, "Airport")
+object_table(ot)
+object_pk(ot)
+object_property_ids(ot)
+
+link_endpoints(bundle_link_type(restored, "RouteOrigin"))
+```
+
+```{r accessor_error, error = TRUE}
+bundle_object_type(restored, "Spaceport")
+```
+
+## A bundle to play with
+
+The package ships a larger example, with interfaces, an action, a query,
+a concept and a template:
+
+```{r example}
+demo <- spec_example_bundle()
+demo
+names(bundle_concepts(demo))
+```
+
+## Older bundles
+
+`as_bundle()` accepts a bundle, a raw list or a file path. It also understands
+older key names (`objectTypes`, `table_name`, `action_id`, ...), maps them to
+the current ones and warns once. `read_bundle()`, `bundle_from_json()` and
+`validate_bundle()` all go through the same mapping.
+
+## Key principles
+
+1. **Describe once.** One bundle is the single source of truth.
+2. **Reference by id.** Entities point at each other with stable ids.
+3. **Backend-agnostic.** Bundles say where data lives, not how to query it.
+4. **Version everything.** Bundles and concepts carry versions.
+5. **Read through accessors.** Layout can change; the accessors will not.
+
+## Next steps
+
+- [What is an ontology?](what-is-an-ontology.html): the ideas, with analogies.
+- [Concepts in depth](doc/concept-overview.html): concept definitions and templates.
+- [Manual](manual.html): every exported function.
+- [News](news.html): what changed in each release.

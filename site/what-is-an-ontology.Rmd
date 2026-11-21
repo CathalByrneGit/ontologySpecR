@@ -1,0 +1,194 @@
+---
+title: What is an ontology?
+---
+
+```{r setup, include = FALSE}
+library(ontologySpecR)
+```
+
+You do not need any background in knowledge graphs or semantic web
+standards to use this package. This page explains the idea with everyday
+analogies, then shows the same idea in a few lines of R.
+
+## The floor plan analogy
+
+Imagine a hospital where every department keeps its own map of the building.
+Reception draws wards as boxes, facilities draws pipes and wiring, and the
+fire team draws exits. Each map is correct for its owner, and none of them
+agree on what a "room" is.
+
+An **ontology** is the shared floor plan. It says which kinds of things exist
+(rooms, wards, doors), how they relate (a ward *contains* rooms), and what you
+are allowed to do with them (*lock* a door). Every team can still add its own
+layers, but they all start from the same description of the building.
+
+> **Think of it like this:** data is the furniture, an ontology is the floor
+> plan. You can move the furniture daily without redrawing the plan.
+
+## Why a written description beats tribal knowledge
+
+Most data projects do not fail because the data is wrong. They fail because
+two people mean different things by the same word, and nobody wrote it down.
+
+`ontologySpecR` gives you a small, precise vocabulary for writing it down, in
+R code, and a JSON format so the description can be shared, versioned and
+checked by machines.
+
+## The building blocks
+
+Each block below has a plain-English role and a constructor in the package.
+
+### Object types: the nouns
+
+An **object type** describes a kind of real-world thing: an airport, a
+patient, an invoice. It lists the thing's properties and says which property
+uniquely identifies one instance (the **primary key**).
+
+```{r object_type}
+airport <- object_type(
+  id = "Airport",
+  properties = list(
+    property_def("airport_id", "string", nullable = FALSE),
+    property_def("name", "string"),
+    property_def("latitude", "number"),
+    property_def("longitude", "number")
+  ),
+  primary_key = "airport_id",
+  source_kind = "table",
+  source_table = "airports"
+)
+airport
+```
+
+The `source_*` fields say where the rows live. The description is
+**backend-agnostic**: it points at a table but does not care which database
+holds it.
+
+### Link types: the verbs
+
+A **link type** is a named relationship between two object types. A flight
+route *departs from* an airport; an airline *operates* a route.
+
+```{r link_type}
+route_origin <- link_type(
+  id = "RouteOrigin",
+  from = "FlightRoute",
+  to = "Airport",
+  cardinality = "many-to-one",
+  join_from_keys = "origin_id",
+  join_to_keys = "airport_id"
+)
+route_origin
+```
+
+### Interfaces: "anything with a plug"
+
+An **interface** is a shape contract. A travel adaptor does not care whether
+it is plugged into a kettle or a laptop, only that there are two pins. In the
+same way, a map component only needs "something with a latitude and a
+longitude", not specifically an airport.
+
+```{r interface}
+geo_located <- interface_type(
+  id = "GeoLocated",
+  required_properties = list(
+    property_requirement("latitude", "number"),
+    property_requirement("longitude", "number")
+  )
+)
+geo_located
+```
+
+### Actions and queries: doing and asking
+
+- An **action type** declares an operation (for example *update airport
+  status*), its parameters, and what it changes.
+- A **query** is a saved, parameterised question (for example *airports within
+  50 km of here*).
+
+Both are descriptions. The package records *what* exists; other packages in
+the ecosystem decide *how* to run them.
+
+### Concepts: the adjectives
+
+A **concept** is a named judgement about an object, written as a SQL boolean
+expression: "a *busy* airport is one with more than 50,000 passengers a day".
+Concepts are **versioned** and **scoped**, so two teams can define "busy"
+differently without overwriting each other, and a definition can change
+without silently rewriting history.
+
+```{r concept}
+busy_airport <- concept_def(
+  id = "busy_airport",
+  object_type_id = "Airport",
+  scope = "operations",
+  version = 1L,
+  sql_expr = "daily_passengers > 50000",
+  rationale = "Matches the operations team's staffing threshold."
+)
+busy_airport
+```
+
+A **concept template** is the same idea with blanks to fill in
+(`utilisation_rate > {{threshold}}`), for families of similar definitions.
+
+## Bundles: the box it all ships in
+
+All of these blocks are packed into one **bundle**: a versioned, validated,
+serialisable package of the whole ontology.
+
+```{r bundle}
+b <- bundle(
+  bundle_id = "aviation-demo",
+  bundle_version = "0.1.0",
+  objects = list(airport),
+  links = list(route_origin),
+  interfaces = list(geo_located),
+  concepts = list(busy_airport)
+)
+b
+```
+
+A bundle is just data. It can be written to one JSON file, checked against a
+schema, committed to git and read by any tool that understands the format.
+
+## Spec, not runtime
+
+`ontologySpecR` only **describes**. It never touches a database and never runs
+an action. That separation is deliberate: every other package in the
+ecosystem reads the same bundle and adds one capability.
+
+| Package | Adds |
+|---|---|
+| `ontologySpecR` | The shared vocabulary and file format (this package) |
+| `objectSetsR` | Lazy queries over object types |
+| `actionTypesR` | Running actions |
+| `vertexR` | Graph analysis |
+| `conceptR` | Evaluating and governing concepts |
+| `objectExplorerR` | A point-and-click browser |
+
+## The key insight
+
+Write the description once, in one place, and let every tool read it. When
+the definition of "busy airport" changes, you change one versioned entry, not
+five dashboards.
+
+## Quick reference
+
+| Term | In plain English | Analogy |
+|---|---|---|
+| Object type | A kind of thing | A noun |
+| Property | One field on a thing | An attribute |
+| Primary key | What makes one instance unique | A passport number |
+| Link type | A relationship between kinds of things | A verb |
+| Interface | A shape several types can share | A plug standard |
+| Action type | A declared operation | A button |
+| Query | A saved question | A bookmark |
+| Concept | A versioned yes/no judgement | An adjective |
+| Bundle | Everything, packaged | A shipping box |
+
+## Next steps
+
+- [Getting started](getting-started.html): build, validate and read your first bundle.
+- [Concepts in depth](doc/concept-overview.html): the full vignette, including concept templates.
+- [Manual](manual.html): every function, documented.
