@@ -1,3 +1,16 @@
+# ontologySpecR 0.2.2
+
+## New features
+
+* Schema-qualified tables:
+  - `object_schema(ot)` — `source$schema` when it is a single non-empty
+    string, otherwise `NULL`.
+  - `object_table_id(ot)` — `list(schema =, table =)` for building
+    `DBI::Id()` or `dbplyr::in_schema()`. Aborts on query-backed types, like
+    `object_table()`. `object_table()` itself still returns the bare table
+    name, so callers that need to query schema-qualified tables should switch
+    to `object_table_id()`.
+
 # ontologySpecR 0.2.1
 
 ## New features

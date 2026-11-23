@@ -381,6 +381,40 @@ object_table <- function(ot) {
   source$table %||% ot$id
 }
 
+#' Get the database schema for an object type
+#'
+#' Returns `source$schema` when it is a single non-empty string, otherwise
+#' `NULL`.
+#'
+#' @param ot An object type.
+#' @return A string, or `NULL` when the type has no schema.
+#' @export
+object_schema <- function(ot) {
+  schema <- ot$source$schema
+  if (is.character(schema) && length(schema) == 1L && !is.na(schema) &&
+      nzchar(schema)) {
+    schema
+  } else {
+    NULL
+  }
+}
+
+#' Get the schema-qualified table reference for an object type
+#'
+#' Returns a plain list so callers can build `DBI::Id()` or
+#' `dbplyr::in_schema()` themselves; ontologySpecR does not depend on DBI.
+#' Aborts for query-backed types, like [object_table()].
+#'
+#' @param ot An object type.
+#' @return A list with `schema` (a string or `NULL`) and `table` (a string).
+#' @export
+#' @examples
+#' b <- spec_example_bundle()
+#' object_table_id(bundle_object_type(b, "Airport"))
+object_table_id <- function(ot) {
+  list(schema = object_schema(ot), table = object_table(ot))
+}
+
 #' Get the source SQL for a query-backed object type
 #'
 #' @param ot An object type.

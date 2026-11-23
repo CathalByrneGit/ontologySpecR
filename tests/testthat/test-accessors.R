@@ -480,3 +480,48 @@ test_that("link_join_keys errors on missing join or mismatched lengths", {
                         join_from_keys = c("a1", "a2"), join_to_keys = "b1")
   expect_error(link_join_keys(mismatch), "2 fromKeys but 1 toKeys", fixed = TRUE)
 })
+
+# --- schema-qualified tables ---
+test_that("object_schema is NULL when the type has no schema", {
+  ot <- object_type("Widget", list(property_def("id", "string")), "id",
+                    source_table = "widgets")
+  expect_null(object_schema(ot))
+  expect_identical(object_table_id(ot), list(schema = NULL, table = "widgets"))
+})
+
+test_that("object_schema and object_table_id return the schema", {
+  ot <- object_type("Patient", list(property_def("id", "string")), "id",
+                    source_table = "patients", source_schema = "analytics")
+  expect_identical(object_schema(ot), "analytics")
+  expect_identical(object_table_id(ot),
+                   list(schema = "analytics", table = "patients"))
+})
+
+test_that("an empty-string schema is treated as none", {
+  ot <- object_type("Widget", list(property_def("id", "string")), "id",
+                    source_table = "widgets", source_schema = "")
+  expect_null(object_schema(ot))
+  expect_null(object_table_id(ot)$schema)
+})
+
+test_that("object_table_id aborts for query-backed types", {
+  ot <- object_type("Computed", list(property_def("id", "string")), "id",
+                    source_kind = "query", source_sql = "SELECT 1 AS id",
+                    source_schema = "analytics")
+  expect_error(object_table_id(ot), "query-backed")
+})
+
+test_that("object_table_id falls back to the id when there is no table", {
+  ot <- object_type("Widget", list(property_def("id", "string")), "id")
+  expect_identical(object_table_id(ot), list(schema = NULL, table = "Widget"))
+})
+
+test_that("schema survives a bundle round trip", {
+  b <- bundle("schema-rt", "1.0.0", objects = list(
+    object_type("Patient", list(property_def("id", "string")), "id",
+                source_table = "patients", source_schema = "analytics")
+  ))
+  b2 <- bundle_from_json(bundle_to_json(b))
+  expect_identical(object_table_id(bundle_object_type(b2, "Patient")),
+                   list(schema = "analytics", table = "patients"))
+})

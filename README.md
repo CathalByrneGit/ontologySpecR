@@ -120,6 +120,8 @@ at <- bundle_action_type(b, "UpdateAirportStatus")
 
 # Object type accessors
 object_table(ot)        # "airports" (or falls back to id)
+object_schema(ot)       # "public", or NULL when the type has no schema
+object_table_id(ot)     # list(schema = "public", table = "airports")
 object_pk(ot)           # c("airport_id")
 object_property_ids(ot) # c("airport_id", "name", "city", ...)
 object_source(ot)       # list(kind = "table", table = "airports", ...)
